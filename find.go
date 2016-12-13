@@ -1,10 +1,12 @@
 package main
 
 import (
+	"container/list"
 	"fmt"
 	"go/ast"
 	"go/parser"
 	"go/token"
+
 	"log"
 
 	"golang.org/x/tools/go/ast/astutil"
@@ -26,45 +28,70 @@ func findDefinition(goRoot, goPath, filepath string, pos int) (*Definition, erro
 		return nil, err
 	}
 	nodes, _ := astutil.PathEnclosingInterval(f, token.Pos(pos), token.Pos(pos))
-
-	id := nodes[0]
-	parent := nodes[1]
-	switch p := parent.(type) {
-	case *ast.SelectorExpr:
-		log.Println("SelectorExpr", p)
-	default:
-		ident := id.(*ast.Ident)
-		if ident.Obj != nil {
-			switch decl := ident.Obj.Decl.(type) {
-			case (*ast.AssignStmt):
-				for _, expr := range decl.Lhs {
-					if e, ok := expr.(*ast.Ident); ok && e.Name == ident.Name {
-						return &Definition{
-							Name:        ident.Name,
-							Package:     f.Name.String(),
-							Declaration: "",
-							Path:        set.Position(e.Pos()).String(),
-							Document:    "",
-						}, nil
-					}
-				}
-			case (*ast.ValueSpec):
-				for _, name := range decl.Names {
-					if name.Name == ident.Name {
-						return &Definition{
-							Name:        ident.Name,
-							Package:     f.Name.String(),
-							Declaration: "",
-							Path:        set.Position(name.Pos()).String(),
-							Document:    "",
-						}, nil
-					}
-				}
-				log.Println(decl)
+	if len(nodes) > 0 {
+		ident, ok := nodes[0].(*ast.Ident)
+		if ok {
+			stack := list.New()
+			if _, ok = nodes[1].(*ast.SelectorExpr); ok {
+				findSelectorStack(stack, nodes[1])
+			} else {
+				stack.PushBack(ident)
 			}
-		} else {
-			log.Println("external", ident)
+
+			for stack.Len() > 0 {
+				value := stack.Remove(stack.Back())
+				ast.Print(set, value)
+				log.Println("=======")
+			}
 		}
 	}
 	return nil, fmt.Errorf("can't find definition")
 }
+
+func findSelectorStack(stack *list.List, node ast.Node) {
+	switch n := node.(type) {
+	case *ast.SelectorExpr:
+		stack.PushBack(n.Sel)
+		findSelectorStack(stack, n.X)
+	case *ast.TypeAssertExpr:
+		findSelectorStack(stack, n.Type)
+	case *ast.StarExpr:
+		findSelectorStack(stack, n.X)
+	case *ast.CallExpr:
+		findSelectorStack(stack, n.Fun)
+	case *ast.Ident:
+		stack.PushBack(n)
+	}
+}
+
+// if ident.Obj != nil {
+// 	switch decl := ident.Obj.Decl.(type) {
+// 	case (*ast.AssignStmt):
+// 		for _, expr := range decl.Lhs {
+// 			if e, ok := expr.(*ast.Ident); ok && e.Name == ident.Name {
+// 				return &Definition{
+// 					Name:        ident.Name,
+// 					Package:     f.Name.String(),
+// 					Declaration: "",
+// 					Path:        set.Position(e.Pos()).String(),
+// 					Document:    "",
+// 				}, nil
+// 			}
+// 		}
+// 	case (*ast.ValueSpec):
+// 		for _, name := range decl.Names {
+// 			if name.Name == ident.Name {
+// 				return &Definition{
+// 					Name:        ident.Name,
+// 					Package:     f.Name.String(),
+// 					Declaration: "",
+// 					Path:        set.Position(name.Pos()).String(),
+// 					Document:    "",
+// 				}, nil
+// 			}
+// 		}
+// 		log.Println(decl)
+// 	}
+// } else {
+// 	log.Println("external", ident)
+// }
