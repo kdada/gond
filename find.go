@@ -37,12 +37,7 @@ func findDefinition(goRoot, goPath, filepath string, pos int) (*Definition, erro
 			} else {
 				stack.PushBack(ident)
 			}
-
-			for stack.Len() > 0 {
-				value := stack.Remove(stack.Back())
-				ast.Print(set, value)
-				log.Println("=======")
-			}
+			return findDefinitionByStack(set, stack)
 		}
 	}
 	return nil, fmt.Errorf("can't find definition")
@@ -64,34 +59,46 @@ func findSelectorStack(stack *list.List, node ast.Node) {
 	}
 }
 
-// if ident.Obj != nil {
-// 	switch decl := ident.Obj.Decl.(type) {
-// 	case (*ast.AssignStmt):
-// 		for _, expr := range decl.Lhs {
-// 			if e, ok := expr.(*ast.Ident); ok && e.Name == ident.Name {
-// 				return &Definition{
-// 					Name:        ident.Name,
-// 					Package:     f.Name.String(),
-// 					Declaration: "",
-// 					Path:        set.Position(e.Pos()).String(),
-// 					Document:    "",
-// 				}, nil
-// 			}
-// 		}
-// 	case (*ast.ValueSpec):
-// 		for _, name := range decl.Names {
-// 			if name.Name == ident.Name {
-// 				return &Definition{
-// 					Name:        ident.Name,
-// 					Package:     f.Name.String(),
-// 					Declaration: "",
-// 					Path:        set.Position(name.Pos()).String(),
-// 					Document:    "",
-// 				}, nil
-// 			}
-// 		}
-// 		log.Println(decl)
-// 	}
-// } else {
-// 	log.Println("external", ident)
-// }
+func findDefinitionByStack(set *token.FileSet, stack *list.List) (*Definition, error) {
+	// for stack.Len() > 0 {
+	// 	value := stack.Remove(stack.Back())
+	// 	ast.Print(set, value)
+	// 	log.Println("=======")
+	// }
+
+	ident := stack.Remove(stack.Front()).(*ast.Ident)
+	ast.Print(set, ident)
+	f := set.File(ident.Pos())
+	if ident.Obj != nil {
+		switch decl := ident.Obj.Decl.(type) {
+		case (*ast.AssignStmt):
+			for _, expr := range decl.Lhs {
+				if e, ok := expr.(*ast.Ident); ok && e.Name == ident.Name {
+					return &Definition{
+						Name:        ident.Name,
+						Package:     f.Name(),
+						Declaration: "",
+						Path:        set.Position(e.Pos()).String(),
+						Document:    "",
+					}, nil
+				}
+			}
+		case (*ast.ValueSpec):
+			for _, name := range decl.Names {
+				if name.Name == ident.Name {
+					return &Definition{
+						Name:        ident.Name,
+						Package:     f.Name(),
+						Declaration: "",
+						Path:        set.Position(name.Pos()).String(),
+						Document:    "",
+					}, nil
+				}
+			}
+			log.Println(decl)
+		}
+	} else {
+		log.Println("external", ident)
+	}
+	return nil, fmt.Errorf("can't find definition")
+}
