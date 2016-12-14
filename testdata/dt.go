@@ -19,4 +19,5 @@ func test() {
 	a.BBB()
 	var kkk interface{} = a
 	kkk.(*testStruct).BBB()
+	test()
 }

@@ -9,6 +9,7 @@ import (
 
 	"strconv"
 
+	"github.com/kdada/gond/finder"
 	"github.com/spf13/cobra"
 )
 
@@ -23,7 +24,8 @@ var rootCmd = &cobra.Command{
 		if err != nil {
 			log.Fatalln(err)
 		}
-		def, err := findDefinition(os.Getenv("GOROOT"), os.Getenv("GOPATH"), path, pos)
+		finder := finder.NewFinder(os.Getenv("GOROOT"), os.Getenv("GOPATH"))
+		def, err := finder.FindDefinition(path, pos)
 		if err != nil {
 			log.Fatalln(err)
 		}
