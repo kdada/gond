@@ -89,23 +89,31 @@ func (f *Finder) AnalyseSelector(stack *list.List, node ast.Node) {
 func (f *Finder) AnalyseStack(stack *list.List) (ast.Node, error) {
 	for stack.Len() > 1 {
 		ident := stack.Remove(stack.Back()).(*ast.Ident)
-		// selector := stack.Remove(stack.Back()).(*ast.Ident)
 		if ident.Obj != nil {
 			switch decl := ident.Obj.Decl.(type) {
 			case (*ast.AssignStmt):
-				// x := -1
-				// for i, expr := range decl.Lhs {
-				// 	if e, ok := expr.(*ast.Ident); ok && e.Name == ident.Name {
-				// 		x = i
-				// 		break
-				// 	}
-				// }
-				// if len(decl.Lhs) == len(decl.Rhs) {
-				// 	v := decl.Rhs[x]
-				// 	f.AnalyseSelector(stack)
-				// } else {
-				// 	// TODO: find func result
-				// }
+				x := -1
+				for i, expr := range decl.Lhs {
+					if e, ok := expr.(*ast.Ident); ok && e.Name == ident.Name {
+						x = i
+						break
+					}
+				}
+				if len(decl.Lhs) == len(decl.Rhs) {
+					f.AnalyseSelector(stack, decl.Rhs[x])
+				} else {
+					// the i-th result of the function
+					fs := list.New()
+					f.AnalyseSelector(fs, decl.Rhs[0].(*ast.CallExpr).Fun)
+					if fs.Len() <= 0 {
+						return nil, fmt.Errorf("can't find any function")
+					}
+					funcDecl, err := f.FindIdentDecl(fs.Front().Value.(*ast.Ident))
+					if err != nil {
+						return nil, err
+					}
+					f.AnalyseSelector(stack, funcDecl.(*ast.FuncDecl).Type.Results.List[x].Type)
+				}
 			case (*ast.ValueSpec):
 				for i, name := range decl.Names {
 					if name.Name == ident.Name {
@@ -131,10 +139,33 @@ func (f *Finder) AnalyseStack(stack *list.List) (ast.Node, error) {
 						}
 					}
 				}
-			case (*ast.TypeSpec):
-				f.AnalyseSelector(stack, decl.Type)
 			case (*ast.FuncDecl):
 				f.AnalyseSelector(stack, decl.Type.Results.List[0].Type)
+			case (*ast.TypeSpec):
+				// shrink
+				switch dest := decl.Type.(type) {
+				case (*ast.Ident):
+					stack.PushBack(dest)
+				case (*ast.StructType):
+					// file, err := f.fileByPos(decl.Pos())
+					// if err != nil {
+					// 	return nil, err
+					// }
+					// for _, sd := range file.Decls {
+					// 	switch sdi := sd.(type) {
+					// 	case (*ast.GenDecl):
+					// 		for _, field := range sdi.Specs {
+					// 			switch fd := field.(type) {
+					// 			case (*ast.ValueSpec):
+
+					// 			}
+					// 		}
+					// 	}
+					// }
+					// selector := stack.Remove(stack.Back()).(*ast.Ident)
+
+				}
+
 			}
 		} else {
 			// TODO
