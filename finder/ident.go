@@ -88,41 +88,57 @@ func (f *Finder) AnalyseSelector(stack *list.List, node ast.Node) {
 // AnalyseStack analyse selector stack
 func (f *Finder) AnalyseStack(stack *list.List) (ast.Node, error) {
 	for stack.Len() > 1 {
-		// ident := stack.Remove(stack.Back()).(*ast.Ident)
+		ident := stack.Remove(stack.Back()).(*ast.Ident)
 		// selector := stack.Remove(stack.Back()).(*ast.Ident)
-		// if ident.Obj != nil {
-		// 	switch decl := ident.Obj.Decl.(type) {
-		// 	case (*ast.AssignStmt):
-		// 		x := -1
-		// 		for i, expr := range decl.Lhs {
-		// 			if e, ok := expr.(*ast.Ident); ok && e.Name == ident.Name {
-		// 				x = i
-		// 				break
-		// 			}
-		// 		}
-		// 		if len(decl.Lhs) == len(decl.Rhs) {
-		// 			//f.findSelector(stack, decl.Rhs[x], false, false)
-		// 		} else {
-		// 			// TODO: find func result
-		// 		}
-		// 	case (*ast.ValueSpec):
-		// 		for i, name := range decl.Names {
-		// 			if name.Name == ident.Name {
-		// 				if decl.Type != nil {
-		// 					//f.findSelector(stack, decl.Type, false, false)
-		// 				} else {
-		// 					//f.findSelector(stack, decl.Values[i], false, false)
-		// 				}
-		// 			}
-		// 		}
-		// 	case (*ast.TypeSpec):
-		// 		f.AnalyseSelector(stack, decl.Type)
-		// 	case (*ast.FuncDecl):
-		// 		stack.PushBack()
-		// 	}
-		// } else {
-		// 	// TODO
-		// }
+		if ident.Obj != nil {
+			switch decl := ident.Obj.Decl.(type) {
+			case (*ast.AssignStmt):
+				// x := -1
+				// for i, expr := range decl.Lhs {
+				// 	if e, ok := expr.(*ast.Ident); ok && e.Name == ident.Name {
+				// 		x = i
+				// 		break
+				// 	}
+				// }
+				// if len(decl.Lhs) == len(decl.Rhs) {
+				// 	v := decl.Rhs[x]
+				// 	f.AnalyseSelector(stack)
+				// } else {
+				// 	// TODO: find func result
+				// }
+			case (*ast.ValueSpec):
+				for i, name := range decl.Names {
+					if name.Name == ident.Name {
+						if decl.Type != nil {
+							f.AnalyseSelector(stack, decl.Type)
+						} else {
+							if len(decl.Names) == len(decl.Values) {
+								f.AnalyseSelector(stack, decl.Values[i])
+							} else {
+								// the i-th result of the function
+								fs := list.New()
+								f.AnalyseSelector(fs, decl.Values[0].(*ast.CallExpr).Fun)
+								if fs.Len() <= 0 {
+									return nil, fmt.Errorf("can't find any function")
+								}
+								funcDecl, err := f.FindIdentDecl(fs.Front().Value.(*ast.Ident))
+								if err != nil {
+									return nil, err
+								}
+								f.AnalyseSelector(stack, funcDecl.(*ast.FuncDecl).Type.Results.List[i].Type)
+							}
+
+						}
+					}
+				}
+			case (*ast.TypeSpec):
+				f.AnalyseSelector(stack, decl.Type)
+			case (*ast.FuncDecl):
+				f.AnalyseSelector(stack, decl.Type.Results.List[0].Type)
+			}
+		} else {
+			// TODO
+		}
 	}
 	return stack.Back().Value.(ast.Node), nil
 }
